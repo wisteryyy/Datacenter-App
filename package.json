@@ -6,6 +6,6 @@
     "install:all": "npm install --prefix todo-backend && npm install --prefix todo-frontend"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^9.2.1"
   }
 }

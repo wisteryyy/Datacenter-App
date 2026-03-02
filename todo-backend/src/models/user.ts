@@ -1,32 +1,24 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { dbRun, dbGet } from '../db.js';
-import type { User } from '../types.js';
+import { eq } from 'drizzle-orm';
+import { db } from '../db.js';
+import { users } from '../shema.js'
 
-// Регистрирует нового пользователя в базе данных
+export type User = typeof users.$inferSelect;
+
 export const createUser = async (username: string, password: string): Promise<User> => {
-  const id = crypto.randomUUID(); // генерируем уникальный ID
-
-  // Хэшируем пароль перед сохранением — bcrypt необратимо шифрует строку.
-  // Число 10 — это "соль": чем выше, тем надёжнее, но медленнее.
-  // Это значит, что даже зная хэш, нельзя восстановить исходный пароль.
+  const id = crypto.randomUUID();
   const passwordHash = await bcrypt.hash(password, 10);
 
-  // Сохраняем пользователя в БД
-  await dbRun(
-    'INSERT INTO users (id, username, passwordHash) VALUES (?, ?, ?)',
-    [id, username, passwordHash]
-  );
+  db.insert(users).values({ id, username, passwordHash }).run();
 
-  // Возвращаем только что созданного пользователя из БД
-  return dbGet<User>('SELECT * FROM users WHERE id = ?', [id]) as Promise<User>;
+  return db.select().from(users).where(eq(users.id, id)).get() as User;
 };
 
-// Ищет пользователя по логину (используется при входе и проверке уникальности)
-export const findUserByUsername = (username: string): Promise<User | undefined> =>
-  dbGet<User>('SELECT * FROM users WHERE username = ?', [username]);
+// Ищет пользователя по логину
+export const findUserByUsername = (username: string): User | undefined =>
+  db.select().from(users).where(eq(users.username, username)).get() as User | undefined;
 
-// Сравнивает введённый пароль с хэшем из базы данных.
-// Возвращает true если совпадают, false если нет.
+// Сравнивает пароль с хэшем
 export const verifyPassword = (password: string, hash: string): Promise<boolean> =>
   bcrypt.compare(password, hash);

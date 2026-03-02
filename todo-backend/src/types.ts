@@ -1,7 +1,5 @@
-// Общие TypeScript-типы, которые используются в нескольких файлах проекта
 import type { Request } from 'express';
 
-// Описывает строку из таблицы users
 export type User = {
   id: string;
   username: string;
@@ -9,7 +7,6 @@ export type User = {
   createdAt: string;
 };
 
-// Описывает строку из таблицы tasks
 export type Task = {
   id: string;
   userId: string;
