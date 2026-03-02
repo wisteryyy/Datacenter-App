@@ -31,6 +31,12 @@ router.post('/register', async (req, res) => {
     return;
   }
 
+  // Защита от передачи числа вместо строки (например, password: 123456 без кавычек)
+  if (typeof username !== 'string' || typeof password !== 'string') {
+    res.status(400).json({ error: 'Username and password must be strings' });
+    return;
+  }
+
   if (password.length < 6) {
   res.status(400).json({ error: 'Password must be at least 6 characters' });
   return;
@@ -75,6 +81,12 @@ router.post('/login', async (req, res) => {
 
   if (!username || !password) {
     res.status(400).json({ error: 'Username and password are required' });
+    return;
+  }
+
+  // Защита от передачи числа вместо строки
+  if (typeof username !== 'string' || typeof password !== 'string') {
+    res.status(400).json({ error: 'Username and password must be strings' });
     return;
   }
 
