@@ -1,24 +1,27 @@
-import jwt from 'jsonwebtoken';
+import { verifyAccessToken } from '../services/tokenService.js';
 import type { Response, NextFunction } from 'express';
 import type { AuthRequest } from '../types.js';
 
 export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction): void => {
-  const token = req.headers.authorization?.split(' ')[1];
+  const header = req.headers.authorization;
 
-  if (!token) {
+  if (!header?.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Token required' });
     return;
   }
 
-  try {
-    // Проверяем токен с помощью секретного ключа из .env
-    // Если токен валидный — jwt.verify вернёт его содержимое (payload)
-    // Если истёк или подделан — выбросит исключение
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+  const token = header.substring(7);
 
-    req.userId = payload.userId;
+  try {
+    const payload = verifyAccessToken(token);
+    req.userId = payload.sub;
     next();
-  } catch {
-    res.status(401).json({ error: 'Invalid or expired token' });
+  } catch (err: any) {
+    if (err.message === 'ACCESS_TOKEN_EXPIRED') {
+      // Клиент видит отдельный код и знает, что надо вызвать /auth/refresh
+      res.status(401).json({ error: 'Token expired', code: 'TOKEN_EXPIRED' });
+      return;
+    }
+    res.status(401).json({ error: 'Invalid token' });
   }
 };

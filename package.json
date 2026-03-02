@@ -6,6 +6,10 @@
     "install:all": "npm install --prefix todo-backend && npm install --prefix todo-frontend"
   },
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
     "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7"
   }
 }

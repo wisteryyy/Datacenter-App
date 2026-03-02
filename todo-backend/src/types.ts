@@ -16,6 +16,13 @@ export type Task = {
   updatedAt: string;
 };
 
+// Payload, который хранится внутри Access Token
+export type JwtPayload = {
+  sub: string;    // userId
+  iat?: number;
+  exp?: number;
+};
+
 // Расширяем стандартный тип Request из Express:
 // добавляем поле userId, которое middleware записывает после проверки токена.
 // Знак ? означает, что поле может отсутствовать (до проверки токена)

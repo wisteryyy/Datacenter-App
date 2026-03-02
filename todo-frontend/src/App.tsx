@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { authClient, api } from './api/authClient';
 import './App.css';
 
 // ─── Типы ─────────────────────────────────────────────────
@@ -11,71 +12,13 @@ type Task = {
   updatedAt: string;
 };
 
-type ApiResponse = {
-  token?: string;
-  error?: string;
-};
-
-// ─── API-утилиты ──────────────────────────────────────────
-const API = {
-  headers(token?: string): HeadersInit {
-    return {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-    };
-  },
-
-  async register(username: string, password: string): Promise<ApiResponse> {
-    const res = await fetch('/auth/register', {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify({ username, password }),
-    });
-    return res.json();
-  },
-
-  async login(username: string, password: string): Promise<ApiResponse> {
-    const res = await fetch('/auth/login', {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify({ username, password }),
-    });
-    return res.json();
-  },
-
-  async getTasks(token: string): Promise<Task[]> {
-    const res = await fetch('/tasks', { headers: this.headers(token) });
-    return res.json();
-  },
-
-  async createTask(token: string, text: string): Promise<Task & { error?: string }> {
-    const res = await fetch('/tasks', {
-      method: 'POST',
-      headers: this.headers(token),
-      body: JSON.stringify({ text }),
-    });
-    return res.json();
-  },
-
-  async updateTask(token: string, id: string, data: Partial<Task>): Promise<Task & { error?: string }> {
-    const res = await fetch(`/tasks/${id}`, {
-      method: 'PUT',
-      headers: this.headers(token),
-      body: JSON.stringify(data),
-    });
-    return res.json();
-  },
-
-  async deleteTask(token: string, id: string): Promise<void> {
-    await fetch(`/tasks/${id}`, {
-      method: 'DELETE',
-      headers: this.headers(token),
-    });
-  },
+type User = {
+  id: string;
+  username: string;
 };
 
 // ─── Компонент: форма входа/регистрации ───────────────────
-function AuthForm({ onAuth }: { onAuth: (token: string) => void }) {
+function AuthForm({ onAuth }: { onAuth: (user: User) => void }) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -92,17 +35,18 @@ function AuthForm({ onAuth }: { onAuth: (token: string) => void }) {
     setLoading(true);
     setError('');
 
-    const data = mode === 'login'
-      ? await API.login(username, password)
-      : await API.register(username, password);
+    try {
+      // authClient.login/register сохраняет AT в памяти,
+      // RT приходит в HttpOnly cookie автоматически
+      const user = mode === 'login'
+        ? await authClient.login(username, password)
+        : await authClient.register(username, password);
 
-    setLoading(false);
-
-    if (data.error) {
-      setError(data.error);
-    } else if (data.token) {
-      localStorage.setItem('token', data.token);
-      onAuth(data.token);
+      onAuth(user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ошибка входа');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -159,7 +103,6 @@ function AuthForm({ onAuth }: { onAuth: (token: string) => void }) {
 // ─── Компонент: одна задача ────────────────────────────────
 type TaskItemProps = {
   task: Task;
-  token: string;
   onUpdate: (id: string, data: Partial<Task>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 };
@@ -217,40 +160,63 @@ function TaskItem({ task, onUpdate, onDelete }: TaskItemProps) {
 }
 
 // ─── Компонент: главная страница с задачами ───────────────
-function TodoApp({ token, onLogout }: { token: string; onLogout: () => void }) {
+function TodoApp({ onLogout }: { onLogout: () => void }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newText, setNewText] = useState('');
   const [filter, setFilter] = useState<'all' | 'active' | 'done'>('all');
   const [loading, setLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const loadTasks = useCallback(async () => {
-    const data = await API.getTasks(token);
-    if (Array.isArray(data)) setTasks(data);
-    setLoading(false);
-  }, [token]);
+    try {
+      const data = await api.getTasks();
+      if (Array.isArray(data)) setTasks(data);
+    } catch (err) {
+      // AT и RT оба невалидны — отправляем на логин
+      if (err instanceof Error && err.message === 'Unauthorized') {
+        setSessionExpired(true);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
+  // При монтировании пробуем получить задачи.
+  // authClient.fetchWithAuth автоматически вызовет /auth/refresh,
+  // если AT отсутствует (например, после перезагрузки страницы).
   useEffect(() => { loadTasks(); }, [loadTasks]);
+
+  // Сессия истекла — показываем форму входа
+  if (sessionExpired) {
+    return <AuthForm onAuth={() => { setSessionExpired(false); loadTasks(); }} />;
+  }
 
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newText.trim()) return;
-    const task = await API.createTask(token, newText.trim());
-    if (!task.error) {
-      setTasks((prev) => [task, ...prev]);
-      setNewText('');
-    }
+    try {
+      const task = await api.createTask(newText.trim());
+      if (!task.error) {
+        setTasks((prev) => [task, ...prev]);
+        setNewText('');
+      }
+    } catch { /* ignore */ }
   };
 
   const updateTask = async (id: string, data: Partial<Task>) => {
-    const updated = await API.updateTask(token, id, data);
-    if (!updated.error) {
-      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
-    }
+    try {
+      const updated = await api.updateTask(id, data);
+      if (!updated.error) {
+        setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      }
+    } catch { /* ignore */ }
   };
 
   const deleteTask = async (id: string) => {
-    await API.deleteTask(token, id);
-    setTasks((prev) => prev.filter((t) => t.id !== id));
+    try {
+      await api.deleteTask(id);
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+    } catch { /* ignore */ }
   };
 
   const filtered = tasks.filter((t) => {
@@ -324,7 +290,6 @@ function TodoApp({ token, onLogout }: { token: string; onLogout: () => void }) {
             <TaskItem
               key={task.id}
               task={task}
-              token={token}
               onUpdate={updateTask}
               onDelete={deleteTask}
             />
@@ -341,14 +306,28 @@ function TodoApp({ token, onLogout }: { token: string; onLogout: () => void }) {
 
 // ─── Корневой компонент ────────────────────────────────────
 export default function App() {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
+  // Вместо токена храним факт аутентификации.
+  // Реальный AT живёт в памяти authClient, RT — в HttpOnly cookie.
+  // При старте пытаемся восстановить сессию через /auth/refresh —
+  // это происходит автоматически внутри TodoApp при первом запросе задач.
+  const [isAuthed, setIsAuthed] = useState(false);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
+  const handleAuth = (_user: User) => setIsAuthed(true);
+
+  const handleLogout = async () => {
+    await authClient.logout();
+    setIsAuthed(false);
   };
 
-  return token
-    ? <TodoApp token={token} onLogout={handleLogout} />
-    : <AuthForm onAuth={setToken} />;
+  // При первой загрузке пробуем тихо обновить сессию через RT cookie.
+  // Если cookie нет или истёк — покажем форму входа.
+  useEffect(() => {
+    authClient.refresh().then((ok) => {
+      if (ok) setIsAuthed(true);
+    });
+  }, []);
+
+  return isAuthed
+    ? <TodoApp onLogout={handleLogout} />
+    : <AuthForm onAuth={handleAuth} />;
 }

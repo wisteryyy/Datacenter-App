@@ -1,6 +1,5 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { sql } from 'drizzle-orm';
 import * as schema from './schema.js';
 import path from 'path';
 
@@ -35,6 +34,22 @@ export const initDB = () => {
       createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS refresh_tokens (
+      id         TEXT PRIMARY KEY,
+      userId     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      tokenHash  TEXT NOT NULL,
+      expiresAt  TEXT NOT NULL,
+      createdAt  TEXT DEFAULT CURRENT_TIMESTAMP,
+      userAgent  TEXT,
+      ipAddress  TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_refresh_tokens_userId
+      ON refresh_tokens(userId);
+
+    CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expiresAt
+      ON refresh_tokens(expiresAt);
   `);
 };
 
