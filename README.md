@@ -18,6 +18,7 @@ cd TODO-LIST-Web
 ### 2. Установить все зависимости
 
 ```bash
+npm install
 npm run install:all
 ```
 
