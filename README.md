@@ -2,7 +2,7 @@
 
 Fullstack приложение для управления задачами с авторизацией.
 
-**Стек:** Node.js · Express · SQLite · React · Vite
+**Стек:** Node.js · Express · Better-SQLite3 · Drizzle ORM · React · Vite
 
 ---
 
@@ -39,3 +39,16 @@ npm run dev
 
 - Бэкенд: [http://localhost:3000](http://localhost:3000)
 - Фронтенд: [http://localhost:5173](http://localhost:5173)
+
+---
+
+## Просмотр базы данных
+
+Drizzle Studio — визуальный интерфейс для просмотра и редактирования данных в БД.
+
+```bash
+cd todo-backend
+npx drizzle-kit studio
+```
+
+Откроется в браузере: [https://local.drizzle.studio](https://local.drizzle.studio)
