@@ -1,15 +1,45 @@
 {
   "name": "todo-app",
   "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "todo-backend",
+    "todo-frontend"
+  ],
   "scripts": {
-    "dev": "concurrently -n backend,frontend -c cyan,green \"npm run dev --prefix todo-backend\" \"npm run dev --prefix todo-frontend\"",
-    "install:all": "npm install --prefix todo-backend && npm install --prefix todo-frontend"
-  },
-  "devDependencies": {
-    "@types/cookie-parser": "^1.4.10",
-    "concurrently": "^9.2.1"
+    "dev": "concurrently -n backend,frontend -c cyan,green \"npm run dev --workspace=todo-backend\" \"npm run dev --workspace=todo-frontend\"",
+    "dev:backend": "npm run dev --workspace=todo-backend",
+    "dev:frontend": "npm run dev --workspace=todo-frontend",
+    "build:frontend": "npm run build --workspace=todo-frontend",
+    "install:all": "npm install"
   },
   "dependencies": {
-    "cookie-parser": "^1.4.7"
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.6.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "drizzle-orm": "^0.45.1",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^25.3.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "concurrently": "^9.2.1",
+    "drizzle-kit": "^0.31.9",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
   }
 }
