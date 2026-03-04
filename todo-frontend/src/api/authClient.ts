@@ -1,14 +1,30 @@
 // src/api/authClient.ts
-// Клиент хранит Access Token в памяти — НЕ в localStorage.
-// При перезагрузке страницы автоматически вызывается /auth/refresh
-// (Refresh Token приходит из HttpOnly cookie браузера автоматически).
 
-const API_BASE = import.meta.env.VITE_API_URL ?? '';
+// Proxy в vite.config.ts перенаправляет /auth, /tasks, /admin на бэкенд.
+// Поэтому API_BASE оставляем пустым — запросы идут на тот же origin.
+const API_BASE = '';
+
+export type UserRole = 'user' | 'admin' | 'super_admin';
+
+export type AdminUser = {
+  id: string;
+  username: string;
+  role: UserRole;
+  createdAt: string;
+};
+
+export type AdminTask = {
+  id: string;
+  userId: string;
+  text: string;
+  done: number;
+  createdAt: string;
+  updatedAt: string;
+};
 
 class AuthClient {
   private accessToken: string | null = null;
 
-  // ─── Получить текущий AT (только для чтения) ──────────────────
   getAccessToken(): string | null {
     return this.accessToken;
   }
@@ -18,7 +34,7 @@ class AuthClient {
     const res = await fetch(`${API_BASE}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',   // получаем cookie от сервера
+      credentials: 'include',
       body: JSON.stringify({ username, password }),
     });
 
@@ -28,8 +44,8 @@ class AuthClient {
     }
 
     const data = await res.json();
-    this.accessToken = data.accessToken;   // храним AT в памяти
-    return data.user;
+    this.accessToken = data.accessToken;
+    return data.user as { id: string; username: string; role: UserRole };
   }
 
   // ─── Вход ─────────────────────────────────────────────────────
@@ -48,10 +64,10 @@ class AuthClient {
 
     const data = await res.json();
     this.accessToken = data.accessToken;
-    return data.user;
+    return data.user as { id: string; username: string; role: UserRole };
   }
 
-  // ─── Обновление AT через RT (cookie отправляется автоматически) ─
+  // ─── Обновление AT через RT ────────────────────────────────────
   async refresh(): Promise<boolean> {
     const res = await fetch(`${API_BASE}/auth/refresh`, {
       method: 'POST',
@@ -68,6 +84,19 @@ class AuthClient {
     return true;
   }
 
+  // ─── Получить данные текущего пользователя ────────────────────
+  // Используется при перезагрузке страницы для восстановления сессии
+  async getMe(): Promise<{ id: string; username: string; role: UserRole } | null> {
+    try {
+      const res = await this.fetchWithAuth(`${API_BASE}/auth/me`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.user ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   // ─── Выход ────────────────────────────────────────────────────
   async logout() {
     await fetch(`${API_BASE}/auth/logout`, {
@@ -80,7 +109,6 @@ class AuthClient {
 
   // ─── Fetch с автоматическим обновлением AT ────────────────────
   async fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
-    // Если AT нет — пробуем обновить через RT
     if (!this.accessToken) {
       const ok = await this.refresh();
       if (!ok) throw new Error('Unauthorized');
@@ -92,7 +120,6 @@ class AuthClient {
       credentials: 'include',
     });
 
-    // AT истёк → обновляем и повторяем запрос один раз
     if (res.status === 401) {
       const body = await res.json().catch(() => ({}));
       if (body.code === 'TOKEN_EXPIRED') {
@@ -117,10 +144,9 @@ class AuthClient {
   }
 }
 
-// Синглтон — один экземпляр на всё приложение
 export const authClient = new AuthClient();
 
-// ─── Удобные функции для API задач ────────────────────────────
+// ─── API задач ────────────────────────────────────────────────
 export const api = {
   getTasks: () =>
     authClient.fetchWithAuth(`${API_BASE}/tasks`).then(r => r.json()),
@@ -140,7 +166,36 @@ export const api = {
     }).then(r => r.json()),
 
   deleteTask: (id: string) =>
-    authClient.fetchWithAuth(`${API_BASE}/tasks/${id}`, {
-      method: 'DELETE',
+    authClient.fetchWithAuth(`${API_BASE}/tasks/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Admin API ────────────────────────────────────────────────
+export const adminApi = {
+  getUsers: (): Promise<AdminUser[]> =>
+    authClient.fetchWithAuth(`${API_BASE}/admin/users`).then(r => r.json()),
+
+  getUserTasks: (userId: string): Promise<AdminTask[]> =>
+    authClient.fetchWithAuth(`${API_BASE}/admin/users/${userId}/tasks`).then(r => r.json()),
+
+  deleteUser: (userId: string): Promise<Response> =>
+    authClient.fetchWithAuth(`${API_BASE}/admin/users/${userId}`, { method: 'DELETE' }),
+
+  changeRole: (userId: string, role: UserRole): Promise<Response> =>
+    authClient.fetchWithAuth(`${API_BASE}/admin/users/${userId}/role`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
     }),
+
+  // Изменить задачу любого пользователя (только super_admin)
+  updateTask: (taskId: string, data: { text?: string; done?: boolean }): Promise<AdminTask> =>
+    authClient.fetchWithAuth(`${API_BASE}/admin/tasks/${taskId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(r => r.json()),
+
+  // Удалить задачу любого пользователя (только super_admin)
+  deleteTask: (taskId: string): Promise<Response> =>
+    authClient.fetchWithAuth(`${API_BASE}/admin/tasks/${taskId}`, { method: 'DELETE' }),
 };

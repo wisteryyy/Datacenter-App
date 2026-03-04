@@ -1,8 +1,10 @@
-// Маршруты аутентификации (Register, Login, Refresh, Logout)
 import { Router, type Request, type Response } from 'express'; // Express: создание роутера
-import type { AuthRequest } from '../types.js'; // Тип: запрос с userId
+import type { AuthRequest } from '../types.js';// Тип: запрос с userId
 import { createUser, findUserByUsername, verifyPassword } from '../models/user.js'; // Пользователи
 import { authMiddleware } from '../middleware/auth.js'; // Middleware: проверка JWT
+import { db } from '../db.js';
+import { users } from '../schema.js';
+import { eq } from 'drizzle-orm';
 import {
   generateAccessToken,    // Генерация короткоживущего JWT (15 мин)
   generateRefreshToken,   // Генерация долгоживущего токена (30 дней)
@@ -38,8 +40,7 @@ const COOKIE_OPTIONS = {
   path: '/',                                            // доступен на всех маршрутах
 };
 
-
-// POST /auth/register — Регистрация нового пользователя
+// POST /auth/register
 router.post('/register', async (req: Request, res: Response) => {
   const { username, password } = req.body;
 
@@ -92,7 +93,7 @@ router.post('/register', async (req: Request, res: Response) => {
     // Access токен в теле ответа (клиент хранит в памяти JS)
     res.status(201).json({
       accessToken,
-      user: { id: user.id, username: user.username },
+      user: { id: user.id, username: user.username, role: user.role },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -145,7 +146,7 @@ router.post('/login', async (req: Request, res: Response) => {
   // Возвращаем access токен и информацию о пользователе
   res.json({
     accessToken,
-    user: { id: user.id, username: user.username },
+    user: { id: user.id, username: user.username, role: user.role },
   });
 });
 
@@ -163,7 +164,7 @@ router.post('/login', async (req: Request, res: Response) => {
  * - Старый токен инвалидируется (удаляется из БД)
  * - Если старый токен используется снова → возможная кража → отозвать все сессии
  */
-  router.post('/refresh', async (req: Request, res: Response) => {
+router.post('/refresh', async (req: Request, res: Response) => {
   // Cookie отправляются браузером автоматически (SameSite позволяет)
   const refreshToken = req.cookies?.refreshToken as string | undefined;
   const userId = req.cookies?.userId as string | undefined;
@@ -205,6 +206,23 @@ router.post('/login', async (req: Request, res: Response) => {
   } catch {
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// GET /auth/me — восстановление данных пользователя по токену
+// Используется фронтендом при перезагрузке страницы
+router.get('/me', authMiddleware, (req: AuthRequest, res: Response) => {
+  const user = db
+    .select({ id: users.id, username: users.username, role: users.role })
+    .from(users)
+    .where(eq(users.id, req.userId!))
+    .get();
+
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  res.json({ user });
 });
 
 // POST /auth/logout — Выход (текущая сессия)

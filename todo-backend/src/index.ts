@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import { initDB, closeDB } from './db.js';
 import authRouter from './routes/auth.js';
 import tasksRouter from './routes/tasks.js';
+import adminRouter from './routes/admin.js';
 import { cleanupExpiredTokens } from './services/tokenService.js';
 
 const app = express();
@@ -17,6 +18,7 @@ app.use(cookieParser());   // парсит req.cookies
 
 app.use('/auth', authRouter);
 app.use('/tasks', tasksRouter);
+app.use('/admin', adminRouter);  // маршруты для администраторов
 
 const PORT = process.env.PORT ?? 3000;
 

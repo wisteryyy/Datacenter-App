@@ -1,9 +1,9 @@
 import { defineConfig } from 'drizzle-kit';
 
 export default defineConfig({
-  schema: './src/schema.ts',
+  schema: './todo-backend/src/schema.ts',
   dialect: 'sqlite',
   dbCredentials: {
-    url: './todo.db',
+    url: './todo-backend/todo.db',
   },
 });
