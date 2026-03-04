@@ -12,7 +12,9 @@
     "dev:frontend": "vite",
     "build:frontend": "vite build",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "gen:secrets": "node -e \"import('crypto').then(c => { console.log('JWT_ACCESS_SECRET=' + c.randomBytes(64).toString('hex')); console.log('JWT_REFRESH_SECRET=' + c.randomBytes(64).toString('hex')); })\"",
+    "setrole": "tsx setrole.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
